@@ -3,8 +3,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import OTP from "@/lib/models/OTP"
-import { dbConnect } from "@/lib/mongodb"
 import User from "@/lib/models/User"
+import { dbConnect } from "@/lib/mongodb"
 
 export async function POST(request: NextRequest) {
   try {

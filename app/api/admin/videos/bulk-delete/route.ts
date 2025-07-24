@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { dbConnect } from "@/lib/mongodb"
 import { VideoModel } from "@/lib/models/videoModel"
-import { deleteCloudinaryVideo } from "@/lib/utils/cloudinary-delete"
+
 
 export async function POST(request: Request) {
   try {
@@ -21,17 +21,7 @@ export async function POST(request: Request) {
     // Collect all video URLs
     const videoUrls = videos.map((video) => video.videoUrl).filter(Boolean)
 
-    // Delete videos from Cloudinary
-    if (videoUrls.length > 0) {
-      const deletePromises = videoUrls.map((url) =>
-        deleteCloudinaryVideo(url).catch((error) => {
-          console.warn(`Failed to delete video ${url} from Cloudinary:`, error)
-          return null
-        }),
-      )
-      await Promise.allSettled(deletePromises)
-    }
-
+  
     // Delete videos from database
     await VideoModel.deleteMany({ _id: { $in: videoIds } })
 

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { dbConnect } from "@/lib/mongodb"
 import { VideoModel } from "@/lib/models/videoModel"
 import { videoSchema } from "@/lib/validations/video-schema"
-import { deleteCloudinaryVideo } from "@/lib/utils/cloudinary-delete"
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -69,14 +68,14 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     // Delete video from Cloudinary (if you have this utility function)
-    if (video.videoUrl) {
-      try {
-        await deleteCloudinaryVideo(video.videoUrl)
-      } catch (error) {
-        console.warn("Failed to delete video from Cloudinary:", error)
-        // Continue with database deletion even if Cloudinary deletion fails
-      }
-    }
+    // if (video.videoUrl) {
+    //   try {
+    //     await deleteCloudinaryVideo(video.videoUrl)
+    //   } catch (error) {
+    //     console.warn("Failed to delete video from Cloudinary:", error)
+    //     // Continue with database deletion even if Cloudinary deletion fails
+    //   }
+    // }
 
     // Delete video from database
     await VideoModel.findByIdAndDelete(params.id)
