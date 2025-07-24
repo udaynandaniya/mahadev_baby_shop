@@ -258,12 +258,7 @@ export default function QueryPage() {
                   Yes, each product page includes detailed size information and age recommendations.
                 </p>
               </div>
-              <div>
-                <h4 className="font-medium mb-1">What payment methods do you accept?</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-300">
-                  We currently accept Cash on Delivery (COD) for all orders.
-                </p>
-              </div>
+              
             </CardContent>
           </Card>
         </div>
