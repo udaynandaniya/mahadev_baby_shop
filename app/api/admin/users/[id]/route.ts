@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { dbConnect } from "@/lib/mongodb"
-import { User } from "@/models/User"
+import { User } from "@/lib/models"
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {

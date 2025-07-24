@@ -1,13 +1,16 @@
+//C:\Users\UDAYN\Downloads\Projects\mahadev-baby - Copy\app\api\auth\delete-account\route.ts
+
 import { NextRequest, NextResponse } from "next/server"
-import { connectToDB } from "@/lib/db"
 import User from "@/lib/models/User"
 import bcrypt from "bcryptjs"
+import { dbConnect } from "@/lib/mongodb"
+
 
 export async function POST(req: NextRequest) {
   try {
     const { identifier, password } = await req.json()
 
-    await connectToDB()
+    await dbConnect()
 
     const user = await User.findOne({
       $or: [{ email: identifier }, { phone: identifier }],
