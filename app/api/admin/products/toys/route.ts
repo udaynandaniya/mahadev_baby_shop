@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // // //C:\Users\UDAYN\Downloads\Projects\mahadev-baby - Copy\app\api\admin\products\toys\route.ts
 // // import { NextResponse } from "next/server"
 // // import { dbConnect } from "@/lib/mongodb"
