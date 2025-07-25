@@ -2,10 +2,11 @@
 
 import type React from "react"
 
-import { AdminHeader } from "@/components/admin-header"
 import { useAuth } from "@/app/contexts/auth-provider"
 import { redirect } from "next/navigation"
 import { useEffect } from "react"
+import AdminHeader from "./admin-header"
+
 
 interface AdminLayoutProps {
   children: React.ReactNode

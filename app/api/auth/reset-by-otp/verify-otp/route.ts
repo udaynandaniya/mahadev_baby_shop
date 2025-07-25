@@ -1,33 +1,10 @@
-// import { type NextRequest, NextResponse } from "next/server"
-// import { verifyOtp } from "@/lib/verification/verifyOtp"
-
-// export async function POST(request: NextRequest) {
-//   try {
-//     const { email, otp } = await request.json()
-
-//     if (!email || !otp) {
-//       return NextResponse.json({ error: "Email and OTP are required" }, { status: 400 })
-//     }
-
-//     // Verify the OTP
-//     const verificationResult = await verifyOtp(email, otp)
-
-//     if (!verificationResult.success) {
-//       return NextResponse.json({ error: verificationResult.message }, { status: 400 })
-//     }
-
-//     return NextResponse.json({ message: "OTP verified successfully" }, { status: 200 })
-//   } catch (error) {
-//     console.error("Verify OTP error:", error)
-//     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-//   }
-// }
 
 
 //C:\Users\UDAYN\Downloads\Projects\mahadev-baby - Copy\app\api\auth\reset-by-otp\verify-otp\route.ts
 import { type NextRequest, NextResponse } from "next/server"
-import dbConnect from "@/lib/mongodb"
+
 import OTP from "@/lib/models/OTP"
+import { dbConnect } from "@/lib/mongodb"
 
 export async function POST(request: NextRequest) {
   try {

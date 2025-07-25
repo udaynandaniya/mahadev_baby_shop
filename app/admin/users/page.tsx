@@ -8,42 +8,68 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, RefreshCw, Users, Eye, UserCheck, UserX, Crown, Mail, Phone, Calendar } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Search,
+  RefreshCw,
+  Users,
+  Eye,
+  UserCheck,
+  UserX,
+  Crown,
+  Mail,
+  Phone,
+  Calendar,
+  Shield,
+  AlertTriangle,
+  Loader2,
+  TrendingUp,
+  UserPlus,
+  Settings,
+} from "lucide-react"
 import { AnimatedBackground } from "@/components/animated-background"
 import { toast } from "react-hot-toast"
+import { useAuth } from "@/app/contexts/auth-provider"
+import type { User } from "@/types/user"
 
-interface User {
-  _id: string
-  name: string
-  email: string
-  phone?: string
-  role: "user" | "admin"
-  isActive: boolean
-  isVerified: boolean
-  createdAt: string
-  lastLogin?: string
-  totalOrders: number
-  totalSpent: number
-  address?: {
-    street: string
-    city: string
-    state: string
-    pincode: string
-  }
+interface UserStats {
+  totalUsers: number
+  activeUsers: number
+  adminUsers: number
+  verifiedUsers: number
 }
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
+  const [stats, setStats] = useState<UserStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isUpdating, setIsUpdating] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [roleFilter, setRoleFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "role" | "status"
+    user: User
+    newValue: any
+  } | null>(null)
+
+  const { user: currentUser } = useAuth()
 
   useEffect(() => {
     fetchUsers()
+    fetchStats()
   }, [])
 
   useEffect(() => {
@@ -53,7 +79,14 @@ export default function UsersManagement() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch("/api/admin/users")
+      const response = await fetch("/api/admin/users", {
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch users")
+      }
+
       const data = await response.json()
       setUsers(data)
     } catch (error) {
@@ -64,25 +97,37 @@ export default function UsersManagement() {
     }
   }
 
+  const fetchStats = async () => {
+    try {
+      const response = await fetch("/api/admin/users/stats", {
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data)
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+    }
+  }
+
   const filterUsers = () => {
     let filtered = users
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (user) =>
           user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (user.phone && user.phone.includes(searchTerm)),
+          user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.phone?.includes(searchTerm),
       )
     }
 
-    // Role filter
     if (roleFilter !== "all") {
       filtered = filtered.filter((user) => user.role === roleFilter)
     }
 
-    // Status filter
     if (statusFilter === "active") {
       filtered = filtered.filter((user) => user.isActive)
     } else if (statusFilter === "inactive") {
@@ -96,71 +141,102 @@ export default function UsersManagement() {
     setFilteredUsers(filtered)
   }
 
-  const updateUserStatus = async (userId: string, isActive: boolean) => {
+  const handleRoleChange = (user: User, newRole: "user" | "admin") => {
+    // Prevent self-demotion
+    if (user._id === currentUser?.userId && newRole === "user") {
+      toast.error("You cannot demote yourself from admin. Ask another admin to do this.")
+      return
+    }
+
+    setConfirmAction({
+      type: "role",
+      user,
+      newValue: newRole,
+    })
+  }
+
+  const handleStatusChange = (user: User, newStatus: boolean) => {
+    setConfirmAction({
+      type: "status",
+      user,
+      newValue: newStatus,
+    })
+  }
+
+  const executeAction = async () => {
+    if (!confirmAction) return
+
+    setIsUpdating(true)
     try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
+      const updateData =
+        confirmAction.type === "role" ? { role: confirmAction.newValue } : { isActive: confirmAction.newValue }
+
+      const response = await fetch(`/api/admin/users/${confirmAction.user._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive }),
+        credentials: "include",
+        body: JSON.stringify(updateData),
       })
 
-      if (response.ok) {
-        toast.success(`User ${isActive ? "activated" : "deactivated"} successfully`)
-        fetchUsers()
-      } else {
-        toast.error("Failed to update user status")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to update user")
       }
-    } catch (error) {
-      console.error("Error updating user status:", error)
-      toast.error("Failed to update user status")
+
+      const actionText =
+        confirmAction.type === "role"
+          ? `User role updated to ${confirmAction.newValue}`
+          : `User ${confirmAction.newValue ? "activated" : "deactivated"} successfully`
+
+      toast.success(actionText)
+      await fetchUsers()
+      await fetchStats()
+    } catch (error: any) {
+      console.error("Error updating user:", error)
+      toast.error(error.message || "Failed to update user")
+    } finally {
+      setIsUpdating(false)
+      setConfirmAction(null)
     }
   }
 
-  const updateUserRole = async (userId: string, role: "user" | "admin") => {
-    try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      })
-
-      if (response.ok) {
-        toast.success(`User role updated to ${role}`)
-        fetchUsers()
-      } else {
-        toast.error("Failed to update user role")
-      }
-    } catch (error) {
-      console.error("Error updating user role:", error)
-      toast.error("Failed to update user role")
-    }
-  }
-
-  const getRoleBadge = (role: string) => {
-    if (role === "admin") {
-      return (
-        <Badge className="bg-purple-100 text-purple-800 flex items-center gap-1">
-          <Crown className="h-3 w-3" />
-          Admin
-        </Badge>
-      )
-    }
-    return <Badge variant="outline">User</Badge>
+  const getRoleBadge = (role: User["role"]) => {
+    return role === "admin" ? (
+      <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1">
+        <Crown className="h-3 w-3" />
+        Admin
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="flex items-center gap-1">
+        <Users className="h-3 w-3" />
+        User
+      </Badge>
+    )
   }
 
   const getStatusBadge = (isActive: boolean, isVerified: boolean) => {
-    if (!isActive) {
-      return <Badge variant="destructive">Inactive</Badge>
-    }
-    if (!isVerified) {
-      return <Badge variant="secondary">Unverified</Badge>
-    }
-    return <Badge className="bg-green-100 text-green-800">Active</Badge>
+    if (!isActive) return <Badge variant="destructive">Inactive</Badge>
+    if (!isVerified) return <Badge variant="secondary">Unverified</Badge>
+    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Active</Badge>
   }
 
-  const openUserDetails = (user: User) => {
-    setSelectedUser(user)
-    setIsDetailDialogOpen(true)
+  const openUserDetails = async (user: User) => {
+    try {
+      const response = await fetch(`/api/admin/users/${user._id}`, {
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const userData = await response.json()
+        setSelectedUser(userData)
+        setIsDetailDialogOpen(true)
+      } else {
+        toast.error("Failed to load user details")
+      }
+    } catch (error) {
+      console.error("Error fetching user details:", error)
+      toast.error("Failed to load user details")
+    }
   }
 
   if (isLoading) {
@@ -180,7 +256,6 @@ export default function UsersManagement() {
   return (
     <div className="min-h-screen relative">
       <AnimatedBackground />
-
       <div className="relative z-10 container mx-auto px-4 py-6 md:py-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -194,56 +269,70 @@ export default function UsersManagement() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchUsers}
+            onClick={() => {
+              fetchUsers()
+              fetchStats()
+            }}
             className="rounded-xl bg-transparent w-full sm:w-auto"
+            disabled={isUpdating}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className={`h-4 w-4 mr-2 ${isUpdating ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-xl md:text-2xl font-bold text-blue-600">{users.length}</p>
-                <p className="text-xs md:text-sm text-muted-foreground">Total Users</p>
-              </div>
-            </CardContent>
-          </Card>
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
+              <CardContent className="p-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <Users className="h-5 w-5 text-blue-600 mr-2" />
+                    <p className="text-xl md:text-2xl font-bold text-blue-600">{stats.totalUsers}</p>
+                  </div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Total Users</p>
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-xl md:text-2xl font-bold text-green-600">{users.filter((u) => u.isActive).length}</p>
-                <p className="text-xs md:text-sm text-muted-foreground">Active</p>
-              </div>
-            </CardContent>
-          </Card>
+            <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
+              <CardContent className="p-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <UserCheck className="h-5 w-5 text-green-600 mr-2" />
+                    <p className="text-xl md:text-2xl font-bold text-green-600">{stats.activeUsers}</p>
+                  </div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Active</p>
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-xl md:text-2xl font-bold text-purple-600">
-                  {users.filter((u) => u.role === "admin").length}
-                </p>
-                <p className="text-xs md:text-sm text-muted-foreground">Admins</p>
-              </div>
-            </CardContent>
-          </Card>
+            <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
+              <CardContent className="p-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <Crown className="h-5 w-5 text-purple-600 mr-2" />
+                    <p className="text-xl md:text-2xl font-bold text-purple-600">{stats.adminUsers}</p>
+                  </div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Admins</p>
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
-            <CardContent className="p-4">
-              <div className="text-center">
-                <p className="text-xl md:text-2xl font-bold text-orange-600">
-                  {users.filter((u) => u.isVerified).length}
-                </p>
-                <p className="text-xs md:text-sm text-muted-foreground">Verified</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
+              <CardContent className="p-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-2">
+                    <Shield className="h-5 w-5 text-orange-600 mr-2" />
+                    <p className="text-xl md:text-2xl font-bold text-orange-600">{stats.verifiedUsers}</p>
+                  </div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Verified</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Filters */}
         <Card className="border-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm shadow-lg">
@@ -258,7 +347,6 @@ export default function UsersManagement() {
                   className="pl-10 rounded-xl"
                 />
               </div>
-
               <Select value={roleFilter} onValueChange={setRoleFilter}>
                 <SelectTrigger className="w-full sm:w-32 rounded-xl">
                   <SelectValue placeholder="Role" />
@@ -269,7 +357,6 @@ export default function UsersManagement() {
                   <SelectItem value="admin">Admins</SelectItem>
                 </SelectContent>
               </Select>
-
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full sm:w-36 rounded-xl">
                   <SelectValue placeholder="Status" />
@@ -312,7 +399,16 @@ export default function UsersManagement() {
                 <TableBody>
                   {filteredUsers.map((user) => (
                     <TableRow key={user._id}>
-                      <TableCell className="font-medium text-sm">{user.name}</TableCell>
+                      <TableCell className="font-medium text-sm">
+                        <div className="flex items-center gap-2">
+                          {user.name}
+                          {user._id === currentUser?.userId && (
+                            <Badge variant="secondary" className="text-xs">
+                              You
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-sm">{user.email}</TableCell>
                       <TableCell className="hidden sm:table-cell text-sm">{user.phone || "N/A"}</TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
@@ -333,27 +429,28 @@ export default function UsersManagement() {
                             size="sm"
                             onClick={() => openUserDetails(user)}
                             className="h-8 w-8 p-0"
+                            disabled={isUpdating}
                           >
                             <Eye className="h-3 w-3" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => updateUserStatus(user._id, !user.isActive)}
+                            onClick={() => handleStatusChange(user, !user.isActive)}
                             className="h-8 w-8 p-0"
+                            disabled={isUpdating}
                           >
                             {user.isActive ? <UserX className="h-3 w-3" /> : <UserCheck className="h-3 w-3" />}
                           </Button>
-                          {user.role !== "admin" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => updateUserRole(user._id, "admin")}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Crown className="h-3 w-3" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRoleChange(user, user.role === "admin" ? "user" : "admin")}
+                            className="h-8 w-8 p-0"
+                            disabled={isUpdating || (user._id === currentUser?.userId && user.role === "admin")}
+                          >
+                            <Crown className="h-3 w-3" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -361,6 +458,14 @@ export default function UsersManagement() {
                 </TableBody>
               </Table>
             </div>
+
+            {filteredUsers.length === 0 && (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground font-medium">No users found</p>
+                <p className="text-sm text-muted-foreground">Try adjusting your search or filters</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -368,16 +473,21 @@ export default function UsersManagement() {
         <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
             <DialogHeader>
-              <DialogTitle className="text-lg md:text-xl">User Details - {selectedUser?.name}</DialogTitle>
+              <DialogTitle className="text-lg md:text-xl flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                User Details - {selectedUser?.name}
+              </DialogTitle>
               <DialogDescription className="text-sm">Complete user information and activity</DialogDescription>
             </DialogHeader>
-
             {selectedUser && (
               <div className="space-y-4 md:space-y-6">
                 {/* Basic Information */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base md:text-lg">Basic Information</CardTitle>
+                    <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      Basic Information
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -408,7 +518,10 @@ export default function UsersManagement() {
                 {/* Account Status */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base md:text-lg">Account Status</CardTitle>
+                    <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      Account Status
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -442,7 +555,10 @@ export default function UsersManagement() {
                 {/* Order Statistics */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base md:text-lg">Order Statistics</CardTitle>
+                    <CardTitle className="text-base md:text-lg flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      Order Statistics
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -466,7 +582,7 @@ export default function UsersManagement() {
                       <div className="space-y-2">
                         <p>{selectedUser.address.street}</p>
                         <p>
-                          {selectedUser.address.city}, {selectedUser.address.state}
+                          {selectedUser.address.area}, {selectedUser.address.state}
                         </p>
                         <p>PIN: {selectedUser.address.pincode}</p>
                       </div>
@@ -478,26 +594,70 @@ export default function UsersManagement() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => updateUserStatus(selectedUser._id, !selectedUser.isActive)}
+                    onClick={() => handleStatusChange(selectedUser, !selectedUser.isActive)}
                     className="w-full sm:w-auto"
+                    disabled={isUpdating}
                   >
                     {selectedUser.isActive ? "Deactivate User" : "Activate User"}
                   </Button>
-                  {selectedUser.role !== "admin" && (
-                    <Button
-                      variant="outline"
-                      onClick={() => updateUserRole(selectedUser._id, "admin")}
-                      className="w-full sm:w-auto"
-                    >
-                      <Crown className="h-4 w-4 mr-2" />
-                      Make Admin
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => handleRoleChange(selectedUser, selectedUser.role === "admin" ? "user" : "admin")}
+                    className="w-full sm:w-auto"
+                    disabled={isUpdating || (selectedUser._id === currentUser?.userId && selectedUser.role === "admin")}
+                  >
+                    <Crown className="h-4 w-4 mr-2" />
+                    {selectedUser.role === "admin" ? "Revoke Admin" : "Make Admin"}
+                  </Button>
                 </div>
               </div>
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Confirmation Dialog */}
+        <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                Confirm Action
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmAction?.type === "role" ? (
+                  <>
+                    Are you sure you want to {confirmAction.newValue === "admin" ? "promote" : "demote"}{" "}
+                    <strong>{confirmAction.user.name}</strong> {confirmAction.newValue === "admin" ? "to" : "from"}{" "}
+                    admin?
+                    {confirmAction.newValue === "admin" && (
+                      <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm">
+                        <strong>Warning:</strong> This user will have full administrative access to the system.
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to {confirmAction?.newValue ? "activate" : "deactivate"}{" "}
+                    <strong>{confirmAction?.user.name}</strong>?
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isUpdating}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={executeAction} disabled={isUpdating}>
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  "Confirm"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )
