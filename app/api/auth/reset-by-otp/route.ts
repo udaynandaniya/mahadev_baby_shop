@@ -3,8 +3,8 @@
 //app/api/auth/reset-by-otp/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import bcryptjs from "bcryptjs"
-import dbConnect from "@/lib/mongodb"
 import User from "@/lib/models/User"
+import { dbConnect } from "@/lib/mongodb"
 
 dbConnect()
 export async function POST(req: NextRequest) {
