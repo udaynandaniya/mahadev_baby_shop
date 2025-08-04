@@ -818,7 +818,7 @@ export async function POST(request: NextRequest) {
     await newOrder.save({ session })
     await session.commitTransaction()
 
-    console.log(`Order created successfully: ${orderNumber}`)
+    // console.log(`Order created successfully: ${orderNumber}`)
 
     return NextResponse.json({
       success: true,

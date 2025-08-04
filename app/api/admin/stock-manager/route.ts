@@ -163,10 +163,10 @@ export async function PUT(request: NextRequest) {
   try {
     await dbConnect()
 
-    console.log("\n\nUpdating stock...in stock-manager route.ts")
+    // console.log("\n\nUpdating stock...in stock-manager route.ts")
     const { itemId, newStock, notes, productType, productCode } = await request.json()
 
-    console.log("Updating stock for item:", { itemId, newStock, notes, productType, productCode })
+    // console.log("Updating stock for item:", { itemId, newStock, notes, productType, productCode })
 
     // 1. Update StockManagerModel
     const updatedItem = await StockManagerModel.findByIdAndUpdate(
@@ -186,7 +186,7 @@ export async function PUT(request: NextRequest) {
     // 2. Update original model based on productType
     let modelUpdated = false
 
-    console.log("Updating stock in original model:", productType, productCode, newStock)
+    // console.log("Updating stock in original model:", productType, productCode, newStock)
     
 
     switch (productType) {
@@ -225,7 +225,7 @@ export async function PUT(request: NextRequest) {
     if (!modelUpdated) {
       console.warn("No matching model updated for:", productCode)
     }
-    console.log("\nStock update successful:", updatedItem)
+    // console.log("\nStock update successful:", updatedItem)
 
     return NextResponse.json(updatedItem)
   } catch (error) {
